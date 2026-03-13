@@ -314,7 +314,7 @@ header {
   <button class="sp-toggle" id="spToggle" onclick="toggleSP()">☰</button>
   <div class="logo">
     <div class="logo-mark">💬</div>
-    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v7</span>
+    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v8</span>
   </div>
   <div class="header-tabs" id="chatTabs">
     <span style="font-size:11px;color:var(--text-dim);align-self:center;padding-left:4px">JSONファイルを読み込んでください</span>
@@ -612,26 +612,35 @@ function renderTopicMsgs(topic){
   const relMsgs = topic.relMsgs || [];
   const relIds = new Set(relMsgs.map(m=>m.id));
 
-  // 表示対象メッセージ
-  const displayMsgs = viewMode==='filter' ? relMsgs : S.msgs;
-
-  if(!displayMsgs.length){
+  // 全件 or 関連メッセージをベースにグループ化
+  const baseMsgs = viewMode==='filter' ? S.msgs : S.msgs;
+  if(!baseMsgs.length){
     document.getElementById('msgsWrap').innerHTML='<div class="empty"><div class="ei">🔍</div><p>メッセージが見つかりませんでした</p></div>';
     return;
   }
 
   // グループ化（同一送信者・5分以内の連続投稿をまとめる）
-  const groups=[];
-  displayMsgs.forEach((m,i)=>{
-    const p=displayMsgs[i-1];
-    if(!p||m.sender!==p.sender||tdiff(p.datetime,m.datetime)>5) groups.push([m]);
-    else groups[groups.length-1].push(m);
+  const allGroups=[];
+  baseMsgs.forEach((m,i)=>{
+    const p=baseMsgs[i-1];
+    if(!p||m.sender!==p.sender||tdiff(p.datetime,m.datetime)>5) allGroups.push([m]);
+    else allGroups[allGroups.length-1].push(m);
   });
 
-  document.getElementById('msgsWrap').innerHTML=groups.map(grp=>{
+  // グループ単位で関連判定
+  const relGroups = allGroups.filter(grp => grp.some(m=>relIds.has(m.id)));
+
+  // 絞込表示：関連グループのみ表示 / 全件表示：全グループ表示（非関連はグレーアウト）
+  const displayGroups = viewMode==='filter' ? relGroups : allGroups;
+
+  if(!displayGroups.length){
+    document.getElementById('msgsWrap').innerHTML='<div class="empty"><div class="ei">🔍</div><p>メッセージが見つかりませんでした</p></div>';
+    return;
+  }
+
+  document.getElementById('msgsWrap').innerHTML=displayGroups.map(grp=>{
     const a=av(grp[0].sender);
-    // 全件表示モードのとき、関連しないグループはグレーアウト
-    const isRel = viewMode==='filter' || grp.some(m=>relIds.has(m.id));
+    const isRel = grp.some(m=>relIds.has(m.id));
     const grayClass = (!isRel) ? ' grayed' : '';
     return `<div class="msg-group${grayClass}">
       <div class="msg-who">
@@ -639,12 +648,12 @@ function renderTopicMsgs(topic){
         <span class="who-name">${esc(grp[0].sender)}</span>
         <span class="who-time">${grp[0].date} ${grp[0].time}</span>
       </div>
-      ${grp.map(m=>bubble(m, viewMode==='all' && !relIds.has(m.id))).join('')}
+      ${grp.map(m=>bubble(m)).join('')}
     </div>`;
   }).join('');
   document.getElementById('msgsWrap').scrollTop=0;
 
-  // 全件表示モードの場合、最初の関連メッセージまでスクロール
+  // 全件表示モードの場合、最初の関連グループまでスクロール
   if(viewMode==='all'){
     setTimeout(()=>{
       const firstRel=document.querySelector('.msg-group:not(.grayed)');
