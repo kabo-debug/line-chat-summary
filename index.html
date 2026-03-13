@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LINE Chat Summary</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #080c14;
+  --surface: #0e1420;
+  --surface2: #151d2e;
+  --surface3: #1c2640;
+  --accent: #00e5a0;
+  --accent-dim: rgba(0,229,160,0.1);
+  --accent2: #38bdf8;
+  --text: #dde6f0;
+  --text-muted: #7a8fa8;
+  --text-dim: #3d5068;
+  --border: #1e2d42;
+  --border-hi: #2a3f5a;
+  --line-green: #06c755;
+  --radius: 14px;
+  --font: 'Zen Kaku Gothic New', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,160,0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,160,0.012) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+/* HEADER */
+header {
+  background: rgba(14,20,32,0.96);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  height: 54px;
+  display: flex; align-items: center; gap: 10px;
+  position: relative; z-index: 100; flex-shrink: 0;
+}
+.logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; }
+.logo-mark {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--line-green), var(--accent));
+  border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0;
+}
+.header-tabs { display: flex; gap: 4px; flex: 1; overflow-x: auto; scrollbar-width: none; }
+.header-tabs::-webkit-scrollbar { display: none; }
+.tab-btn {
+  padding: 5px 12px; border: 1px solid transparent; border-radius: 20px;
+  background: transparent; color: var(--text-muted); cursor: pointer;
+  font-size: 12px; font-family: var(--font); white-space: nowrap; transition: all 0.2s;
+}
+.tab-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--border); }
+.tab-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); font-weight: 500; }
+.hdr-actions { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+.hdr-btn {
+  padding: 5px 11px; background: transparent; border: 1px solid var(--border);
+  color: var(--text-muted); border-radius: 7px; cursor: pointer;
+  font-size: 11px; font-family: var(--font); transition: all 0.2s; white-space: nowrap;
+}
+.hdr-btn:hover { border-color: var(--border-hi); color: var(--text); }
+.sp-toggle {
+  display: none; align-items: center; justify-content: center;
+  width: 32px; height: 32px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 7px; cursor: pointer; font-size: 15px; flex-shrink: 0;
+}
+
+/* MAIN LAYOUT */
+.main { display: flex; flex: 1; height: calc(100vh - 54px); overflow: hidden; position: relative; z-index: 1; }
+
+/* LEFT PANEL */
+.panel-left {
+  width: 350px; min-width: 260px;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--surface); overflow-y: auto;
+}
+.left-hdr {
+  padding: 12px 14px 10px; border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 9px;
+}
+.sec-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; font-family: var(--mono); }
+.date-row { display: flex; gap: 5px; align-items: center; }
+.date-row input[type="date"] {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); padding: 5px 7px; border-radius: 6px; font-size: 11px;
+  font-family: var(--mono); outline: none; transition: border-color 0.2s;
+}
+.date-row input:focus { border-color: var(--accent2); }
+.date-sep { color: var(--text-dim); font-size: 11px; }
+.gen-btn {
+  width: 100%; background: linear-gradient(135deg, var(--accent), #00c48a);
+  color: #061410; border: none; padding: 8px; border-radius: 8px;
+  font-weight: 700; font-size: 13px; cursor: pointer; font-family: var(--font);
+  transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.gen-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(0,229,160,0.28); }
+.gen-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.search-row { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.search-in {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); padding: 6px 10px 6px 28px; border-radius: 7px;
+  font-size: 12px; font-family: var(--font); outline: none; transition: border-color 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%233d5068' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: 9px center;
+}
+.search-in:focus { border-color: var(--accent2); }
+
+.summary-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
+
+/* SUMMARY CARD */
+.s-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 11px 13px; cursor: pointer;
+  transition: all 0.18s; animation: fadeUp 0.3s ease both;
+}
+.s-card:hover { border-color: var(--border-hi); background: var(--surface3); transform: translateX(2px); }
+.s-card.active { border-color: var(--accent); background: var(--surface3); box-shadow: 0 0 0 1px var(--accent-dim); }
+@keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+.s-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.s-badge {
+  font-size: 10px; font-family: var(--mono); color: var(--accent2);
+  background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.2);
+  padding: 2px 6px; border-radius: 10px;
+}
+.s-cnt { font-size: 10px; color: var(--text-dim); font-family: var(--mono); }
+.s-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; line-height: 1.4; }
+.s-summary { font-size: 12px; color: var(--text-muted); line-height: 1.65; margin-bottom: 7px; }
+.s-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.s-tag {
+  font-size: 10px; color: var(--accent); background: var(--accent-dim);
+  border: 1px solid rgba(0,229,160,0.18); padding: 2px 6px; border-radius: 10px; font-family: var(--mono);
+}
+
+/* DROPZONE */
+.dropzone {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 22px 14px; text-align: center; cursor: pointer; transition: all 0.2s; margin: 4px;
+}
+.dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--accent-dim); }
+.dz-icon { font-size: 26px; margin-bottom: 6px; }
+.dropzone p { font-size: 12px; color: var(--text-muted); line-height: 1.7; }
+
+/* RIGHT PANEL */
+.panel-right { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.detail-top {
+  padding: 10px 20px; border-bottom: 1px solid var(--border);
+  background: var(--surface); display: none; flex-direction: column; gap: 6px;
+}
+.detail-top-row1 { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.detail-title { font-size: 15px; font-weight: 600; }
+.detail-meta { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.msgs-wrap { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 0; }
+.view-toggle {
+  display: flex; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 7px; overflow: hidden;
+}
+.vt-btn {
+  padding: 4px 10px; font-size: 11px; font-family: var(--font);
+  background: transparent; border: none; color: var(--text-muted);
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.vt-btn:hover { background: var(--surface2); color: var(--text); }
+.vt-btn.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+.msg-group.grayed { opacity: 0.25; filter: grayscale(1) brightness(0.5); transition: opacity 0.2s, filter 0.2s; }
+.msg-group.grayed:hover { opacity: 0.55; filter: grayscale(0.5) brightness(0.8); }
+
+/* MESSAGES */
+.msg-group { margin-bottom: 12px; animation: fadeUp 0.2s ease both; }
+.msg-who { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+.avatar {
+  width: 25px; height: 25px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.who-name { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.who-time { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+.bubble {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 4px 11px 11px 11px; padding: 8px 12px;
+  font-size: 13px; line-height: 1.75; max-width: 680px;
+  word-break: break-word; margin-left: 32px;
+}
+.bubble + .bubble { margin-top: 3px; }
+.bubble.is-media { color: var(--text-dim); font-style: italic; border-style: dashed; }
+.url-card {
+  display: flex; align-items: center; gap: 9px; background: var(--surface3);
+  border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px;
+  margin-top: 6px; text-decoration: none; transition: border-color 0.2s; overflow: hidden;
+}
+.url-card:hover { border-color: var(--accent2); }
+.url-fav { width: 15px; height: 15px; flex-shrink: 0; }
+.url-body { flex: 1; min-width: 0; }
+.url-link { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-family: var(--mono); }
+.url-domain { font-size: 10px; color: var(--accent2); font-family: var(--mono); }
+
+/* STATS BAR */
+.stats-bar {
+  display: none; flex-wrap: wrap; gap: 16px;
+  padding: 7px 20px; background: var(--surface); border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-dim);
+}
+.stat { display: flex; align-items: center; gap: 4px; }
+.stat-v { color: var(--accent); font-family: var(--mono); font-weight: 500; }
+
+/* EMPTY */
+.empty {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+  color: var(--text-dim); padding: 40px; text-align: center;
+}
+.empty .ei { font-size: 40px; opacity: 0.3; }
+.empty p { font-size: 13px; line-height: 1.7; }
+
+/* SPINNER */
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(0,229,160,0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* MODAL */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  display: flex; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(4px);
+}
+.modal-box {
+  background: var(--surface); border: 1px solid var(--border-hi);
+  border-radius: var(--radius); padding: 26px; width: 440px; max-width: 93vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.modal-box h2 { font-size: 16px; margin-bottom: 7px; }
+.modal-box p { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.7; }
+.modal-box input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); padding: 9px 12px; border-radius: 7px;
+  font-size: 13px; font-family: var(--mono); margin-bottom: 14px; outline: none; transition: border-color 0.2s;
+}
+.modal-box input:focus { border-color: var(--accent2); }
+.modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.btn-ok { background: var(--accent); color: #061410; border: none; padding: 7px 18px; border-radius: 7px; font-weight: 700; cursor: pointer; font-family: var(--font); }
+.btn-cancel { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 7px 18px; border-radius: 7px; cursor: pointer; font-family: var(--font); }
+.btn-cancel:hover { border-color: var(--border-hi); color: var(--text); }
+
+/* TOAST */
+.toast {
+  position: fixed; bottom: 20px; right: 20px;
+  padding: 11px 16px; border-radius: 9px; font-size: 13px; z-index: 300;
+  max-width: 340px; animation: slideIn 0.25s ease; display: none;
+}
+@keyframes slideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* RESPONSIVE */
+@media (max-width: 680px) {
+  .panel-left {
+    position: absolute; z-index: 50; width: 88%; max-width: 340px;
+    height: calc(100vh - 54px); transform: translateX(-110%); transition: transform 0.3s;
+  }
+  .panel-left.sp-open { transform: translateX(0); box-shadow: 4px 0 30px rgba(0,0,0,0.5); }
+  .sp-toggle { display: flex !important; }
+  .logo span { display: none; }
+  .msgs-wrap { padding: 12px; }
+  .bubble { max-width: 100%; }
+  .stats-bar { padding: 7px 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- API Key Modal -->
+<div class="overlay" id="apiModal">
+  <div class="modal-box">
+    <h2>🔑 Anthropic API Key</h2>
+    <p>AIサマリ生成にAnthropicのAPIキーが必要です。<br>
+    キーはブラウザのメモリのみに保持され、Anthropic API以外には送信されません。</p>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." />
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeApiModal()">後で設定</button>
+      <button class="btn-ok" onclick="saveApiKey()">保存して開始</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Header -->
+<header>
+  <button class="sp-toggle" id="spToggle" onclick="toggleSP()">☰</button>
+  <div class="logo">
+    <div class="logo-mark">💬</div>
+    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v7</span>
+  </div>
+  <div class="header-tabs" id="chatTabs">
+    <span style="font-size:11px;color:var(--text-dim);align-self:center;padding-left:4px">JSONファイルを読み込んでください</span>
+  </div>
+  <div class="hdr-actions">
+    <button class="hdr-btn" onclick="showApiModal()">🔑 API Key</button>
+    <button class="hdr-btn" onclick="document.getElementById('fileIn').click()">📂 JSON読込</button>
+    <input type="file" id="fileIn" accept=".json" style="display:none" onchange="onFileSelect(event)" />
+  </div>
+</header>
+
+<div class="main">
+  <!-- Left -->
+  <div class="panel-left" id="panelLeft">
+    <div class="left-hdr">
+      <div class="sec-label">話題サマリ</div>
+      <div class="date-row">
+        <input type="date" id="df" />
+        <span class="date-sep">〜</span>
+        <input type="date" id="dt" />
+      </div>
+      <button class="gen-btn" id="genBtn" onclick="generateSummaries()">
+        <span id="genIcon">✨</span><span id="genTxt">AIサマリ生成</span>
+      </button>
+    </div>
+    <div class="search-row">
+      <input class="search-in" id="searchIn" placeholder="話題・キーワードを検索..." oninput="filterCards()" />
+    </div>
+    <div class="summary-list" id="summaryList">
+      <div class="dropzone" id="dz"
+           ondragover="event.preventDefault();this.classList.add('over')"
+           ondragleave="this.classList.remove('over')"
+           ondrop="onDrop(event)"
+           onclick="document.getElementById('fileIn').click()">
+        <div class="dz-icon">📁</div>
+        <p><strong>app_data_final.json</strong> をここにドロップ<br>またはクリックして選択</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right -->
+  <div class="panel-right">
+    <div class="detail-top" id="detailTop">
+      <div class="detail-top-row1">
+        <div class="detail-title" id="detailTitle"></div>
+        <div class="view-toggle">
+          <button class="vt-btn active" id="vtFilter" onclick="setViewMode('filter')">絞込表示</button>
+          <button class="vt-btn" id="vtAll" onclick="setViewMode('all')">全件表示</button>
+        </div>
+      </div>
+      <div class="detail-meta" id="detailMeta"></div>
+    </div>
+    <div class="msgs-wrap" id="msgsWrap">
+      <div class="empty">
+        <div class="ei">💬</div>
+        <p>右上「<strong>📂 JSON読込</strong>」または左の枠に<br><strong>app_data_final.json</strong> を読み込んでください<br><br>
+        <span style="font-size:11px">データはブラウザ内のみで処理されます</span></p>
+      </div>
+    </div>
+    <div class="stats-bar" id="statsBar">
+      <div class="stat">📅 <span class="stat-v" id="stPeriod"></span></div>
+      <div class="stat">💬 <span class="stat-v" id="stMsgs"></span></div>
+      <div class="stat">👥 <span class="stat-v" id="stUsers"></span></div>
+      <div class="stat">🔗 <span class="stat-v" id="stUrls"></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const S = { apiKey: null, chats: [], currentId: null, summaries: [], msgs: [], cache: {} };
+const PAL = ['#00e5a0','#38bdf8','#fb923c','#e879f9','#4ade80','#f59e0b','#34d399','#818cf8','#f472b6','#22d3ee'];
+const AVC = {};
+function av(s) {
+  if (!AVC[s]) { const n=Object.keys(AVC).length; AVC[s]={c:PAL[n%PAL.length],i:(s||'?')[0].toUpperCase()}; }
+  return AVC[s];
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function tdiff(d1,d2){try{return Math.abs(new Date(d2)-new Date(d1))/60000;}catch{return 999;}}
+let tTimer;
+function toast(msg,type){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.style.display='block';
+  el.style.cssText+=type==='ok'
+    ?'background:#0a1e13;border:1px solid #166534;color:#86efac'
+    :'background:#1e0a0a;border:1px solid #7f1d1d;color:#fca5a5';
+  clearTimeout(tTimer); tTimer=setTimeout(()=>el.style.display='none',3500);
+}
+
+// FILE LOAD
+function onDrop(e){
+  e.preventDefault(); document.getElementById('dz').classList.remove('over');
+  const f=e.dataTransfer.files[0]; if(f) readFile(f);
+}
+function onFileSelect(e){ const f=e.target.files[0]; if(f) readFile(f); e.target.value=''; }
+function readFile(file){
+  const r=new FileReader();
+  r.onload=e=>{
+    try {
+      const data=JSON.parse(e.target.result);
+      if(!Array.isArray(data)) throw new Error('配列形式のJSONではありません');
+      S.chats=data;
+      document.getElementById('dz').style.display='none';
+      renderTabs();
+      if(S.chats.length) selectChat(S.chats[0].id);
+      toast(`✅ ${file.name} 読込完了（${S.chats.length}チャット）`,'ok');
+    } catch(err){ toast('❌ JSON読込エラー: '+err.message); }
+  };
+  r.readAsText(file,'utf-8');
+}
+
+// TABS
+function renderTabs(){
+  const tabs=document.getElementById('chatTabs');
+  tabs.innerHTML='';
+  S.chats.forEach(c=>{
+    const b=document.createElement('button');
+    b.className='tab-btn'; b.textContent=c.name; b.dataset.id=c.id;
+    b.onclick=()=>selectChat(c.id); tabs.appendChild(b);
+  });
+}
+function selectChat(id){
+  S.currentId=id;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',+b.dataset.id===id));
+  const chat=S.chats.find(c=>c.id===id); if(!chat) return;
+  S.msgs=chat.messages;
+  const dates=chat.messages.map(m=>m.date).filter(Boolean).sort();
+  if(dates.length){ document.getElementById('df').value=dates[0]; document.getElementById('dt').value=dates[dates.length-1]; }
+
+  // キャッシュがあれば復元
+  if(S.cache[id]){
+    S.summaries=S.cache[id].summaries;
+    renderCards(S.summaries);
+    // stats復元
+    const c=S.cache[id].stats;
+    const sb=document.getElementById('statsBar');
+    sb.style.display='flex';
+    document.getElementById('stPeriod').textContent=c.period;
+    document.getElementById('stMsgs').textContent=c.msgs;
+    document.getElementById('stUsers').textContent=c.users;
+    document.getElementById('stUrls').textContent=c.urls;
+    // 右パネルはリセット
+    document.getElementById('msgsWrap').innerHTML='<div class="empty"><div class="ei">📋</div><p>サマリカードを選択するとメッセージが表示されます</p></div>';
+    document.getElementById('detailTop').style.display='none';
+    toast('✅ 前回のサマリを復元しました','ok');
+  } else {
+    S.summaries=[];
+    document.getElementById('summaryList').innerHTML=`
+      <div class="empty" style="padding:28px 0">
+        <div class="ei">✨</div>
+        <p>${chat.total.toLocaleString()}件のメッセージ読込済<br>日付範囲を確認して「AIサマリ生成」を押してください</p>
+      </div>`;
+    document.getElementById('msgsWrap').innerHTML='<div class="empty"><div class="ei">📋</div><p>サマリカードを選択するとメッセージが表示されます</p></div>';
+    document.getElementById('detailTop').style.display='none';
+    document.getElementById('statsBar').style.display='none';
+  }
+  if(window.innerWidth<=680) document.getElementById('panelLeft').classList.remove('sp-open');
+}
+
+// API KEY
+function showApiModal(){ document.getElementById('apiModal').style.display='flex'; }
+function closeApiModal(){ document.getElementById('apiModal').style.display='none'; }
+function saveApiKey(){
+  const k=document.getElementById('apiKeyInput').value.trim();
+  if(k){ S.apiKey=k; toast('✅ APIキーを設定しました','ok'); }
+  closeApiModal();
+}
+
+// GENERATE
+async function generateSummaries(){
+  if(!S.apiKey){ showApiModal(); return; }
+  if(!S.msgs.length){ toast('チャットデータがありません'); return; }
+  const df=document.getElementById('df').value, dt=document.getElementById('dt').value;
+  let msgs=S.msgs;
+  if(df) msgs=msgs.filter(m=>m.date>=df);
+  if(dt) msgs=msgs.filter(m=>m.date<=dt);
+  if(!msgs.length){ toast('指定期間にメッセージがありません'); return; }
+
+  const btn=document.getElementById('genBtn');
+  btn.disabled=true;
+  document.getElementById('genIcon').innerHTML='<div class="spinner"></div>';
+  document.getElementById('genTxt').textContent='生成中...';
+  const list=document.getElementById('summaryList');
+  list.innerHTML='<div style="padding:18px 14px;color:var(--text-muted);font-size:12px">🤖 AIが話題を分析中...</div>';
+
+  try {
+    const sample=msgs.slice(0,600);
+    const chatText=sample.map(m=>`[${m.date} ${m.time} ${m.sender}] ${m.text}${m.urls.length?' [URL:'+m.urls[0]+']':''}`).join('\n');
+    const prompt=`以下はLINEオープンチャットのトーク履歴（${df}〜${dt}、総${msgs.length}件中最初の${sample.length}件）です。
+
+${chatText}
+
+---
+このトーク履歴から主要な話題を6〜12個抽出してください。
+- 自動返信（Auto-reply等）や参加/退出通知は除外
+- 実質的な議論・情報共有・質問のみを対象にする
+- 類似した話題はまとめる
+
+必ず以下のJSON配列のみを返してください（前後の説明文は不要）：
+[{"id":1,"title":"タイトル（20字以内）","summary":"要約（80〜120字）","keywords":["KW1","KW2","KW3"],"time_range":"開始〜終了","sentiment":"議論 or 情報共有 or 質問 or 雑談"}]`;
+
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':S.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2500,messages:[{role:'user',content:prompt}]})
+    });
+    if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error?.message||`HTTP ${res.status}`); }
+    const data=await res.json();
+    const raw=data.content.map(b=>b.text||'').join('').trim();
+    const jm=raw.match(/\[[\s\S]*\]/);
+    if(!jm) throw new Error('JSONパース失敗\n'+raw.slice(0,200));
+    const summaries=JSON.parse(jm[0]);
+    S.summaries=summaries.map(s=>({...s,relMsgs:findRel(msgs,s)}));
+    renderCards(S.summaries);
+    const senders=new Set(msgs.map(m=>m.sender));
+    const urlCnt=msgs.filter(m=>m.urls&&m.urls.length).length;
+    const statsData={
+      period:`${df} 〜 ${dt}`,
+      msgs:msgs.length.toLocaleString()+'件',
+      users:senders.size+'人',
+      urls:urlCnt+'件'
+    };
+    const sb=document.getElementById('statsBar');
+    sb.style.display='flex';
+    document.getElementById('stPeriod').textContent=statsData.period;
+    document.getElementById('stMsgs').textContent=statsData.msgs;
+    document.getElementById('stUsers').textContent=statsData.users;
+    document.getElementById('stUrls').textContent=statsData.urls;
+    // キャッシュに保存（チャット切替後も復元できる）
+    S.cache[S.currentId]={summaries:S.summaries, stats:statsData};
+  } catch(err){
+    list.innerHTML=`<div style="padding:14px;color:#fca5a5;font-size:12px;line-height:1.6">❌ ${esc(err.message)}</div>`;
+    console.error(err);
+  } finally {
+    btn.disabled=false;
+    document.getElementById('genIcon').textContent='✨';
+    document.getElementById('genTxt').textContent='AIサマリ生成';
+  }
+}
+
+function findRel(msgs, topic){
+  const kws=[...(topic.keywords||[]),...topic.title.split(/[・、\s　]+/)].map(k=>k.toLowerCase()).filter(k=>k.length>1);
+  return msgs.filter(m=>{ const t=(m.text||'').toLowerCase(); return kws.some(k=>t.includes(k)); });
+}
+
+// RENDER CARDS
+function renderCards(summaries){
+  const list=document.getElementById('summaryList');
+  list.innerHTML='';
+  if(!summaries.length){ list.innerHTML='<div class="empty"><p>話題が抽出できませんでした</p></div>'; return; }
+  const icons={'議論':'🗣','情報共有':'📢','質問':'❓','雑談':'💬'};
+  summaries.forEach((s,i)=>{
+    const card=document.createElement('div');
+    card.className='s-card'; card.style.animationDelay=(i*0.05)+'s';
+    card.innerHTML=`
+      <div class="s-top">
+        <span class="s-badge">${icons[s.sentiment]||'💬'} ${esc(s.sentiment||'')}</span>
+        <span class="s-cnt">${s.relMsgs?.length||0}件</span>
+      </div>
+      <div class="s-title">${esc(s.title)}</div>
+      <div class="s-summary">${esc(s.summary)}</div>
+      <div class="s-tags">${(s.keywords||[]).slice(0,4).map(k=>`<span class="s-tag">${esc(k)}</span>`).join('')}</div>`;
+    card.onclick=()=>{
+      document.querySelectorAll('.s-card').forEach(c=>c.classList.remove('active'));
+      card.classList.add('active'); showTopic(s);
+      if(window.innerWidth<=680) document.getElementById('panelLeft').classList.remove('sp-open');
+    };
+    list.appendChild(card);
+  });
+}
+
+// VIEW MODE
+let viewMode = 'filter'; // 'filter' or 'all'
+let currentTopic = null;
+
+function setViewMode(mode){
+  viewMode = mode;
+  document.getElementById('vtFilter').classList.toggle('active', mode==='filter');
+  document.getElementById('vtAll').classList.toggle('active', mode==='all');
+  if(currentTopic) renderTopicMsgs(currentTopic);
+}
+
+// SHOW TOPIC
+function showTopic(topic){
+  currentTopic = topic;
+  document.getElementById('detailTop').style.display='flex';
+  document.getElementById('detailTitle').textContent=topic.title;
+  const relCount = topic.relMsgs?.length||0;
+  const totalCount = S.msgs.length;
+  document.getElementById('detailMeta').textContent=
+    `${topic.summary}  ·  関連${relCount}件 / 全${totalCount.toLocaleString()}件  ·  ${topic.time_range||''}`;
+  renderTopicMsgs(topic);
+}
+
+function renderTopicMsgs(topic){
+  const relMsgs = topic.relMsgs || [];
+  const relIds = new Set(relMsgs.map(m=>m.id));
+
+  // 表示対象メッセージ
+  const displayMsgs = viewMode==='filter' ? relMsgs : S.msgs;
+
+  if(!displayMsgs.length){
+    document.getElementById('msgsWrap').innerHTML='<div class="empty"><div class="ei">🔍</div><p>メッセージが見つかりませんでした</p></div>';
+    return;
+  }
+
+  // グループ化（同一送信者・5分以内の連続投稿をまとめる）
+  const groups=[];
+  displayMsgs.forEach((m,i)=>{
+    const p=displayMsgs[i-1];
+    if(!p||m.sender!==p.sender||tdiff(p.datetime,m.datetime)>5) groups.push([m]);
+    else groups[groups.length-1].push(m);
+  });
+
+  document.getElementById('msgsWrap').innerHTML=groups.map(grp=>{
+    const a=av(grp[0].sender);
+    // 全件表示モードのとき、関連しないグループはグレーアウト
+    const isRel = viewMode==='filter' || grp.some(m=>relIds.has(m.id));
+    const grayClass = (!isRel) ? ' grayed' : '';
+    return `<div class="msg-group${grayClass}">
+      <div class="msg-who">
+        <div class="avatar" style="background:${a.c};color:#000">${a.i}</div>
+        <span class="who-name">${esc(grp[0].sender)}</span>
+        <span class="who-time">${grp[0].date} ${grp[0].time}</span>
+      </div>
+      ${grp.map(m=>bubble(m, viewMode==='all' && !relIds.has(m.id))).join('')}
+    </div>`;
+  }).join('');
+  document.getElementById('msgsWrap').scrollTop=0;
+
+  // 全件表示モードの場合、最初の関連メッセージまでスクロール
+  if(viewMode==='all'){
+    setTimeout(()=>{
+      const firstRel=document.querySelector('.msg-group:not(.grayed)');
+      if(firstRel) firstRel.scrollIntoView({behavior:'smooth', block:'start'});
+    }, 50);
+  }
+}
+
+function bubble(m, grayed=false){
+  const MI={'画像':'🖼️ 画像','動画':'🎬 動画','スタンプ':'🎭 スタンプ','ファイル':'📎 ファイル'};
+  const isM=MI[m.media_type];
+  const body=isM?`<span style="color:var(--text-dim);font-style:italic">${MI[m.media_type]}</span>`
+               :esc(m.text||'').replace(/\n/g,'<br>');
+  const urls=(m.urls||[]).map(url=>{
+    try{
+      const d=new URL(url).hostname.replace(/^www\./,'');
+      const fav=`https://www.google.com/s2/favicons?domain=${d}&sz=16`;
+      return `<a class="url-card" href="${esc(url)}" target="_blank" rel="noopener">
+        <img class="url-fav" src="${fav}" loading="lazy" onerror="this.style.display='none'" />
+        <div class="url-body"><span class="url-link">${esc(url)}</span><span class="url-domain">${esc(d)}</span></div>
+      </a>`;
+    }catch{return '';}
+  }).join('');
+  return `<div class="bubble${isM?' is-media':''}">${body}${urls}</div>`;
+}
+
+// SEARCH
+function filterCards(){
+  const q=document.getElementById('searchIn').value.toLowerCase();
+  document.querySelectorAll('.s-card').forEach((card,i)=>{
+    const s=S.summaries[i]; if(!s) return;
+    const hit=!q||s.title.toLowerCase().includes(q)||s.summary.toLowerCase().includes(q)||(s.keywords||[]).some(k=>k.toLowerCase().includes(q));
+    card.style.display=hit?'':'none';
+  });
+}
+
+// MOBILE
+function toggleSP(){ document.getElementById('panelLeft').classList.toggle('sp-open'); }
+</script>
+</body>
+</html>
