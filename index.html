@@ -314,7 +314,7 @@ header {
   <button class="sp-toggle" id="spToggle" onclick="toggleSP()">☰</button>
   <div class="logo">
     <div class="logo-mark">💬</div>
-    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v10</span>
+    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v12</span>
   </div>
   <div class="header-tabs" id="chatTabs">
     <span style="font-size:11px;color:var(--text-dim);align-self:center;padding-left:4px">JSONファイルを読み込んでください</span>
@@ -622,6 +622,7 @@ function onMockSelect(e){
 }
 
 
+function findRel(msgs, topic){
   const kws=[...(topic.keywords||[]),...topic.title.split(/[・、\s　]+/)].map(k=>k.toLowerCase()).filter(k=>k.length>1);
   return msgs.filter(m=>{ const t=(m.text||'').toLowerCase(); return kws.some(k=>t.includes(k)); });
 }
@@ -759,6 +760,9 @@ function filterCards(){
 
 // MOBILE
 function toggleSP(){ document.getElementById('panelLeft').classList.toggle('sp-open'); }
+// ブラウザのデフォルトドロップ動作（別タブで開く）をページ全体で防止
+document.addEventListener('dragover', e=>e.preventDefault());
+document.addEventListener('drop', e=>e.preventDefault());
 </script>
 </body>
 </html>
