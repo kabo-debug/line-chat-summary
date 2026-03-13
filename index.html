@@ -314,15 +314,18 @@ header {
   <button class="sp-toggle" id="spToggle" onclick="toggleSP()">☰</button>
   <div class="logo">
     <div class="logo-mark">💬</div>
-    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v8</span>
+    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v9</span>
   </div>
   <div class="header-tabs" id="chatTabs">
     <span style="font-size:11px;color:var(--text-dim);align-self:center;padding-left:4px">JSONファイルを読み込んでください</span>
   </div>
   <div class="hdr-actions">
     <button class="hdr-btn" onclick="showApiModal()">🔑 API Key</button>
+    <button class="hdr-btn" id="mockSaveBtn" onclick="saveMock()" style="display:none">💾 モック保存</button>
+    <button class="hdr-btn" onclick="document.getElementById('mockIn').click()">🧪 モック読込</button>
     <button class="hdr-btn" onclick="document.getElementById('fileIn').click()">📂 JSON読込</button>
     <input type="file" id="fileIn" accept=".json" style="display:none" onchange="onFileSelect(event)" />
+    <input type="file" id="mockIn" accept=".json" style="display:none" onchange="onMockSelect(event)" />
   </div>
 </header>
 
@@ -544,6 +547,8 @@ ${chatText}
     document.getElementById('stUrls').textContent=statsData.urls;
     // キャッシュに保存（チャット切替後も復元できる）
     S.cache[S.currentId]={summaries:S.summaries, stats:statsData};
+    // サマリが1件以上あればモック保存ボタンを表示
+    document.getElementById('mockSaveBtn').style.display='inline-block';
   } catch(err){
     list.innerHTML=`<div style="padding:14px;color:#fca5a5;font-size:12px;line-height:1.6">❌ ${esc(err.message)}</div>`;
     console.error(err);
@@ -554,7 +559,69 @@ ${chatText}
   }
 }
 
-function findRel(msgs, topic){
+// MOCK SAVE
+function saveMock(){
+  if(!Object.keys(S.cache).length){ toast('サマリがまだ生成されていません'); return; }
+  // 全チャットのキャッシュ＋チャット名をまとめて保存
+  const mockData = Object.entries(S.cache).map(([id, cache])=>{
+    const chat = S.chats.find(c=>c.id==id);
+    return { id: Number(id), name: chat?.name||'', cache };
+  });
+  const blob = new Blob([JSON.stringify(mockData, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `mock_summaries_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  toast('✅ モックデータを保存しました','ok');
+}
+
+// MOCK LOAD
+function onMockSelect(e){
+  const f=e.target.files[0]; if(!f) return;
+  e.target.value='';
+  const r=new FileReader();
+  r.onload=ev=>{
+    try {
+      const mockData=JSON.parse(ev.target.result);
+      if(!Array.isArray(mockData)) throw new Error('フォーマットが正しくありません');
+      // app_data_final.jsonが未読込の場合はエラー
+      if(!S.chats.length){ toast('❌ 先にapp_data_final.jsonを読み込んでください'); return; }
+      // キャッシュに復元
+      let count=0;
+      mockData.forEach(item=>{
+        const chat=S.chats.find(c=>c.id===item.id||c.name===item.name);
+        if(chat && item.cache){
+          // relMsgsをS.msgsから再構築（IDで照合）
+          const msgMap=new Map(chat.messages.map(m=>[m.id,m]));
+          item.cache.summaries=item.cache.summaries.map(s=>({
+            ...s,
+            relMsgs:(s.relMsgs||[]).map(m=>msgMap.get(m.id)||m).filter(Boolean)
+          }));
+          S.cache[chat.id]=item.cache;
+          count++;
+        }
+      });
+      if(!count){ toast('❌ 対応するチャットが見つかりませんでした'); return; }
+      // 現在のチャットにキャッシュがあれば即反映
+      if(S.cache[S.currentId]){
+        const c=S.cache[S.currentId];
+        S.summaries=c.summaries;
+        renderCards(S.summaries);
+        const sb=document.getElementById('statsBar');
+        sb.style.display='flex';
+        document.getElementById('stPeriod').textContent=c.stats.period;
+        document.getElementById('stMsgs').textContent=c.stats.msgs;
+        document.getElementById('stUsers').textContent=c.stats.users;
+        document.getElementById('stUrls').textContent=c.stats.urls;
+      }
+      document.getElementById('mockSaveBtn').style.display='inline-block';
+      toast(`✅ モックデータを読み込みました（${count}チャット）`,'ok');
+    } catch(err){ toast('❌ モック読込エラー: '+err.message); }
+  };
+  r.readAsText(f,'utf-8');
+}
+
+
   const kws=[...(topic.keywords||[]),...topic.title.split(/[・、\s　]+/)].map(k=>k.toLowerCase()).filter(k=>k.length>1);
   return msgs.filter(m=>{ const t=(m.text||'').toLowerCase(); return kws.some(k=>t.includes(k)); });
 }
