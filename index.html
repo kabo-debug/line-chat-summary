@@ -328,7 +328,7 @@ header {
   <button class="sp-toggle" id="spToggle" onclick="toggleSP()">☰</button>
   <div class="logo">
     <div class="logo-mark">💬</div>
-    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v14</span>
+    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v15</span>
   </div>
   <div class="header-tabs" id="chatTabs">
     <span style="font-size:11px;color:var(--text-dim);align-self:center;padding-left:4px">JSONファイルを読み込んでください</span>
@@ -389,7 +389,7 @@ header {
     <div class="msgs-wrap" id="msgsWrap">
       <div class="empty">
         <div class="ei">💬</div>
-        <p>右上「<strong>📂 JSON読込</strong>」または左の枠に<br><strong>app_data_final.json</strong> を読み込んでください<br><br>
+        <p>右上「<strong>☁️ Supabase</strong>」を設定するか<br>「<strong>📂 JSON読込</strong>」または左の枠に<br><strong>app_data_final.json</strong> を読み込んでください<br><br>
         <span style="font-size:11px">データはブラウザ内のみで処理されます</span></p>
       </div>
     </div>
@@ -815,26 +815,51 @@ function saveSupabaseKey(){
 async function autoLoadFromSupabase(){
   const anonKey = localStorage.getItem(LS_KEY);
   if(!anonKey) {
-    // 未設定の場合はモーダルを表示して設定を促す
     showSupabaseModal();
     return;
   }
   const statusEl = document.getElementById('autoLoadStatus');
   try {
-    statusEl.textContent = '☁️ Supabaseからサマリを読み込み中...';
-    const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${SUPABASE_FILE}`;
-    const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${anonKey}` }
-    });
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const mockData = await res.json();
-    if(!Array.isArray(mockData)) throw new Error('フォーマットが正しくありません');
-    applyMockData(mockData);
+    statusEl.textContent = '☁️ Supabaseからデータを読み込み中...';
+
+    // app_data_final.json と mock_summaries.json を並行取得
+    const baseUrl = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}`;
+    const headers = { 'Authorization': `Bearer ${anonKey}` };
+
+    const [dataRes, mockRes] = await Promise.all([
+      fetch(`${baseUrl}/app_data_final.json`, { headers }),
+      fetch(`${baseUrl}/mock_summaries.json`, { headers })
+    ]);
+
+    // app_data_final.json の処理
+    if(!dataRes.ok) throw new Error(`app_data_final.json の取得失敗: HTTP ${dataRes.status}`);
+    const chatData = await dataRes.json();
+    if(!Array.isArray(chatData)) throw new Error('app_data_final.json のフォーマットが正しくありません');
+    S.chats = chatData;
+    document.getElementById('dz').style.display = 'none';
+    renderTabs();
+    if(S.chats.length) selectChat(S.chats[0].id);
+
+    // mock_summaries.json の処理
+    if(mockRes.ok){
+      const mockData = await mockRes.json();
+      if(Array.isArray(mockData)){
+        applyMockData(mockData);
+        toast('☁️ Supabaseからデータを読み込みました', 'ok');
+      }
+    } else {
+      toast('☁️ チャットデータを読み込みました（サマリは未生成）', 'ok');
+    }
+
     statusEl.textContent = '';
-    toast('☁️ Supabaseからサマリを読み込みました', 'ok');
+
+    // Supabaseから読み込んだ場合もpendingMockを処理
+    if(S.pendingMock){ applyMockData(S.pendingMock); S.pendingMock = null; }
+
   } catch(err) {
     statusEl.textContent = '';
     console.warn('Supabase auto-load failed:', err.message);
+    toast(`⚠️ Supabase読込失敗: ${err.message}`);
   }
 }
 
