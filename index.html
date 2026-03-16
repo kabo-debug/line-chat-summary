@@ -307,6 +307,20 @@ header {
   </div>
 </div>
 
+<!-- Supabase設定モーダル -->
+<div class="overlay" id="supabaseModal" style="display:none">
+  <div class="modal-box">
+    <h2>☁️ Supabase 接続設定</h2>
+    <p>サマリの自動読み込みにSupabaseのanon keyが必要です。<br>
+    キーはブラウザのlocalStorageに保存され、次回から自動入力されます。</p>
+    <input type="password" id="supabaseKeyInput" placeholder="eyJhbGci..." />
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeSupabaseModal()">後で設定</button>
+      <button class="btn-ok" onclick="saveSupabaseKey()">保存して接続</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- Header -->
@@ -314,13 +328,14 @@ header {
   <button class="sp-toggle" id="spToggle" onclick="toggleSP()">☰</button>
   <div class="logo">
     <div class="logo-mark">💬</div>
-    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v12</span>
+    <span>LINE Chat Summary</span><span style="font-size:10px;font-weight:400;color:var(--text-muted);font-family:var(--mono);margin-left:4px">v14</span>
   </div>
   <div class="header-tabs" id="chatTabs">
     <span style="font-size:11px;color:var(--text-dim);align-self:center;padding-left:4px">JSONファイルを読み込んでください</span>
   </div>
   <div class="hdr-actions">
     <button class="hdr-btn" onclick="showApiModal()">🔑 API Key</button>
+    <button class="hdr-btn" onclick="showSupabaseModal()">☁️ Supabase</button>
     <button class="hdr-btn" id="mockSaveBtn" onclick="saveMock()" style="display:none">💾 モック保存</button>
     <button class="hdr-btn" onclick="document.getElementById('mockIn').click()">🧪 モック読込</button>
     <button class="hdr-btn" onclick="document.getElementById('fileIn').click()">📂 JSON読込</button>
@@ -355,6 +370,7 @@ header {
         <div class="dz-icon">📁</div>
         <p><strong>app_data_final.json</strong> をここにドロップ<br>またはクリックして選択</p>
       </div>
+      <div id="autoLoadStatus" style="padding:10px 14px;font-size:12px;color:var(--text-muted);text-align:center"></div>
     </div>
   </div>
 
@@ -422,6 +438,8 @@ function readFile(file){
       document.getElementById('dz').style.display='none';
       renderTabs();
       if(S.chats.length) selectChat(S.chats[0].id);
+      // Supabaseから先にモックが届いていた場合は即適用
+      if(S.pendingMock){ applyMockData(S.pendingMock); S.pendingMock=null; }
       toast(`✅ ${file.name} 読込完了（${S.chats.length}チャット）`,'ok');
     } catch(err){ toast('❌ JSON読込エラー: '+err.message); }
   };
@@ -763,6 +781,98 @@ function toggleSP(){ document.getElementById('panelLeft').classList.toggle('sp-o
 // ブラウザのデフォルトドロップ動作（別タブで開く）をページ全体で防止
 document.addEventListener('dragover', e=>e.preventDefault());
 document.addEventListener('drop', e=>e.preventDefault());
+
+// -----------------------------------------------------------------------
+// SUPABASE AUTO-LOAD
+// anon keyはlocalStorageに保存。index.htmlには埋め込まない。
+// -----------------------------------------------------------------------
+const SUPABASE_URL = 'https://mwvbwncrxajmmystsyfs.supabase.co';
+const SUPABASE_BUCKET = 'line-chat-summary';
+const SUPABASE_FILE = 'mock_summaries.json';
+const LS_KEY = 'supabase_anon_key'; // localStorageのキー名
+
+// Supabase設定モーダル
+function showSupabaseModal(){
+  const saved = localStorage.getItem(LS_KEY) || '';
+  document.getElementById('supabaseKeyInput').value = saved;
+  document.getElementById('supabaseModal').style.display = 'flex';
+}
+function closeSupabaseModal(){ document.getElementById('supabaseModal').style.display = 'none'; }
+function saveSupabaseKey(){
+  const k = document.getElementById('supabaseKeyInput').value.trim();
+  if(k){
+    localStorage.setItem(LS_KEY, k);
+    toast('✅ Supabase接続設定を保存しました', 'ok');
+    closeSupabaseModal();
+    autoLoadFromSupabase(); // 即座に読み込み開始
+  } else {
+    localStorage.removeItem(LS_KEY);
+    toast('Supabase接続設定を削除しました');
+    closeSupabaseModal();
+  }
+}
+
+async function autoLoadFromSupabase(){
+  const anonKey = localStorage.getItem(LS_KEY);
+  if(!anonKey) {
+    // 未設定の場合はモーダルを表示して設定を促す
+    showSupabaseModal();
+    return;
+  }
+  const statusEl = document.getElementById('autoLoadStatus');
+  try {
+    statusEl.textContent = '☁️ Supabaseからサマリを読み込み中...';
+    const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${SUPABASE_FILE}`;
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${anonKey}` }
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const mockData = await res.json();
+    if(!Array.isArray(mockData)) throw new Error('フォーマットが正しくありません');
+    applyMockData(mockData);
+    statusEl.textContent = '';
+    toast('☁️ Supabaseからサマリを読み込みました', 'ok');
+  } catch(err) {
+    statusEl.textContent = '';
+    console.warn('Supabase auto-load failed:', err.message);
+  }
+}
+
+function applyMockData(mockData){
+  if(!S.chats.length){
+    S.pendingMock = mockData;
+    return;
+  }
+  let count = 0;
+  mockData.forEach(item=>{
+    const chat = S.chats.find(c=>c.id===item.id || c.name===item.name);
+    if(chat && item.cache){
+      const msgMap = new Map(chat.messages.map(m=>[m.id, m]));
+      item.cache.summaries = item.cache.summaries.map(s=>({
+        ...s,
+        relMsgs:(s.relMsgs||[]).map(m=>msgMap.get(m.id)||m).filter(Boolean)
+      }));
+      S.cache[chat.id] = item.cache;
+      count++;
+    }
+  });
+  if(!count) return;
+  if(S.cache[S.currentId]){
+    const c = S.cache[S.currentId];
+    S.summaries = c.summaries;
+    renderCards(S.summaries);
+    const sb = document.getElementById('statsBar');
+    sb.style.display = 'flex';
+    document.getElementById('stPeriod').textContent = c.stats.period;
+    document.getElementById('stMsgs').textContent = c.stats.msgs;
+    document.getElementById('stUsers').textContent = c.stats.users;
+    document.getElementById('stUrls').textContent = c.stats.urls;
+  }
+  document.getElementById('mockSaveBtn').style.display = 'inline-block';
+}
+
+// ページ読み込み完了後に自動実行
+window.addEventListener('load', autoLoadFromSupabase);
 </script>
 </body>
 </html>
